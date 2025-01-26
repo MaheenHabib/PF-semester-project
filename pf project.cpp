@@ -5,6 +5,7 @@
 #include <fstream>
 #include <iomanip>
 #include <limits>
+#include <stdexcept>
 
 using namespace std;
 
@@ -13,7 +14,6 @@ const int MATRIX_ELEMENTS = MATRIX_SIZE * MATRIX_SIZE; // Total positions (25)
 
 // Function to initialize the hidden points in the grid
 void initializeMatrix(int* matrix, int& hiddenIndex1, int& hiddenIndex2, int& hiddenIndex3, int& hiddenIndex4) {
-    // Generate random unique positions for hidden points
     hiddenIndex1 = rand() % MATRIX_ELEMENTS;
     hiddenIndex2 = rand() % MATRIX_ELEMENTS;
     hiddenIndex3 = rand() % MATRIX_ELEMENTS;
@@ -23,7 +23,6 @@ void initializeMatrix(int* matrix, int& hiddenIndex1, int& hiddenIndex2, int& hi
     while (hiddenIndex3 == hiddenIndex1 || hiddenIndex3 == hiddenIndex2) hiddenIndex3 = rand() % MATRIX_ELEMENTS;
     while (hiddenIndex4 == hiddenIndex1 || hiddenIndex4 == hiddenIndex2 || hiddenIndex4 == hiddenIndex3) hiddenIndex4 = rand() % MATRIX_ELEMENTS;
 
-    // Fill the matrix: 1 for hidden points, 0 otherwise
     for (int i = 0; i < MATRIX_ELEMENTS; i++) {
         matrix[i] = (i == hiddenIndex1 || i == hiddenIndex2 || i == hiddenIndex3 || i == hiddenIndex4) ? 1 : 0;
     }
@@ -45,19 +44,26 @@ void displayMatrix() {
 bool playTurn(const string& playerName, int* matrix) {
     int guess;
     while (true) {
-        cout << "\n" << playerName << ", enter your guess (1-25): ";
-        cin >> guess;
+        try {
+            cout << "\n" << playerName << ", enter your guess (1-25): ";
+            cin >> guess;
 
-        if (cin.fail() || guess < 1 || guess > MATRIX_ELEMENTS) {
+            if (cin.fail()) {
+                throw invalid_argument("Invalid input! Please enter a number.");
+            }
+            if (guess < 1 || guess > MATRIX_ELEMENTS) {
+                throw out_of_range("Out of range! Enter a number between 1 and 25.");
+            }
+            break; // Input is valid, exit the loop
+        } catch (const invalid_argument& e) {
             cin.clear(); // Clear the error flag
             cin.ignore(numeric_limits<streamsize>::max(), '\n'); // Discard invalid input
-            cout << "Invalid input! Please enter a number between 1 and 25." << endl;
-        } else {
-            break;
+            cout << "Error: " << e.what() << endl;
+        } catch (const out_of_range& e) {
+            cout << "Error: " << e.what() << endl;
         }
     }
 
-    // Check the guessed position
     if (matrix[guess - 1] == 1) {
         cout << "Congratulations, " << playerName << "! You found a hidden point!" << endl;
         matrix[guess - 1] = 0; // Mark the point as found
@@ -70,37 +76,50 @@ bool playTurn(const string& playerName, int* matrix) {
 
 // Function to log the winner's name to a file
 void logWinner(const string& winnerName) {
-    ofstream file("game_winners.log", ios::app); // Append mode
-    if (file.is_open()) {
+    try {
+        ofstream file("game_winners.log", ios::app);
+        if (!file) {
+            throw runtime_error("Error: Unable to open the log file.");
+        }
         file << "Winner: " << winnerName << endl;
         file.close();
-    } else {
-        cerr << "Error: Unable to write to the log file." << endl;
+    } catch (const runtime_error& e) {
+        cerr << e.what() << endl;
     }
 }
 
 // Function to play the game
 void playGame() {
-    srand(static_cast<unsigned int>(time(0))); // Seed random number generator
+    srand(static_cast<unsigned int>(time(0)));
 
-    // Get the number of players
     int numPlayers;
-    do {
-        cout << "Enter the number of players (2-4): ";
-        cin >> numPlayers;
-        if (numPlayers < 2 || numPlayers > 4) {
-            cout << "Invalid input! Please enter a number between 2 and 4." << endl;
-        }
-    } while (numPlayers < 2 || numPlayers > 4);
+    while (true) {
+        try {
+            cout << "Enter the number of players (2-4): ";
+            cin >> numPlayers;
 
-    // Get player names
+            if (cin.fail()) {
+                throw invalid_argument("Invalid input! Please enter a number.");
+            }
+            if (numPlayers < 2 || numPlayers > 4) {
+                throw out_of_range("Out of range! Enter a number between 2 and 4.");
+            }
+            break;
+        } catch (const invalid_argument& e) {
+            cin.clear();
+            cin.ignore(numeric_limits<streamsize>::max(), '\n');
+            cout << "Error: " << e.what() << endl;
+        } catch (const out_of_range& e) {
+            cout << "Error: " << e.what() << endl;
+        }
+    }
+
     string players[4];
     for (int i = 0; i < numPlayers; i++) {
         cout << "Enter Player " << (i + 1) << "'s name: ";
         cin >> players[i];
     }
 
-    // Initialize scores and hidden points
     int scores[4] = {0};
     int matrix[MATRIX_ELEMENTS];
     int hiddenIndex1, hiddenIndex2, hiddenIndex3, hiddenIndex4;
@@ -108,10 +127,9 @@ void playGame() {
     initializeMatrix(matrix, hiddenIndex1, hiddenIndex2, hiddenIndex3, hiddenIndex4);
     displayMatrix();
 
-    // Game rounds
     bool continueGame = true;
     while (continueGame) {
-        for (int round = 1; round <= 3; round++) { // 3 rounds
+        for (int round = 1; round <= 3; round++) {
             cout << "\n--- Round " << round << " ---" << endl;
             for (int i = 0; i < numPlayers; i++) {
                 cout << "\n" << players[i] << "'s turn:" << endl;
@@ -122,23 +140,22 @@ void playGame() {
             }
         }
 
-        // Ask if players want another round
         string choice;
-        do {
-            cout << "\nDo you want to play another round? (yes/no): ";
-            cin >> choice;
-            if (choice == "yes" || choice == "y" || choice == "YES" || choice == "Y") {
-                continueGame = true;
-            } else if (choice == "no" || choice == "n" || choice == "NO" || choice == "N") {
-                continueGame = false;
-                cout << "Final scores are being calculated..." << endl;
-            } else {
-                cout << "Invalid input. Please enter 'yes' or 'no'." << endl;
+        while (true) {
+            try {
+                cout << "\nDo you want to play another round? (yes/no): ";
+                cin >> choice;
+                if (choice != "yes" && choice != "no" && choice != "Yes" && choice != "No" && choice != "y" && choice != "n" && choice != "Y" && choice != "N") {
+                    throw invalid_argument("Invalid input! Please enter 'yes' or 'no'.");
+                }
+                break;
+            } catch (const invalid_argument& e) {
+                cout << "Error: " << e.what() << endl;
             }
-        } while (choice != "yes" && choice != "y" && choice != "no" && choice != "n");
+        }
+        continueGame = (choice == "yes" || choice == "y" || choice == "Y" || choice == "Yes");
     }
 
-    // Determine the winner
     int maxScore = 0;
     string winner;
     bool tie = false;
@@ -157,7 +174,7 @@ void playGame() {
         cout << "\nIt's a tie! Well played, everyone!" << endl;
     } else {
         cout << "\nCongratulations, " << winner << "! You are the winner!" << endl;
-        logWinner(winner); // Log the winner to a file
+        logWinner(winner);
     }
 }
 
@@ -165,9 +182,19 @@ int main() {
     char playAgain;
     do {
         playGame();
-        cout << "\nDo you want to play the game again? (y/n): ";
-        cin >> playAgain;
-    } while (playAgain == 'y' || playAgain == 'Y');
+        while (true) {
+            try {
+                cout << "\nDo you want to play the game again? (y/n): ";
+                cin >> playAgain;
+                if (playAgain != 'y' && playAgain != 'Y' && playAgain != 'yes' && playAgain != 'Yes' && playAgain != 'n' && playAgain != 'N' && playAgain != 'no' && playAgain != 'No') {
+                    throw invalid_argument("Invalid input! Please enter 'y' or 'n'.");
+                }
+                break;
+            } catch (const invalid_argument& e) {
+                cout << "Error: " << e.what() << endl;
+            }
+        }
+    } while (playAgain == 'y' || playAgain == 'Y' || playAgain == 'Yes' || playAgain == 'yes');
 
     cout << "Thank you for playing! Goodbye!" << endl;
     return 0;
